@@ -1,0 +1,9 @@
+services:
+  omop-merge:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Optional: set defaults via env vars (can still be overridden in the UI)
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

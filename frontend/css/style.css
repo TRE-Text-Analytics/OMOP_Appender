@@ -1,0 +1,750 @@
+/* ==========================================================================
+   OMOP Merge Tool — Stylesheet
+   Units: rem for layout/typography, em for component-internal spacing,
+   % / fr for fluid grids. Fixed px only for hairline borders and shadows.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Design tokens
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Colours */
+  --bg:           #0f1117;
+  --bg2:          #161b25;
+  --bg3:          #1e2535;
+  --bg4:          #242d40;
+  --border:       #2a3347;
+  --border2:      #3d4f6e;
+  --text:         #e2e8f0;
+  --text2:        #8b9ab5;
+  --text3:        #4a5568;
+  --accent:       #4f9cf9;
+  --accent-dim:   #1a3560;
+  --green:        #34d399;
+  --green-dim:    #0d2e22;
+  --amber:        #fbbf24;
+  --amber-dim:    #2d2008;
+  --red:          #f87171;
+  --red-dim:      #2d0f0f;
+
+  /* Typography */
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+
+  /* Spacing scale (multiples of 0.25rem = 4px base) */
+  --space-1:  0.25rem;   /*  4px */
+  --space-2:  0.5rem;    /*  8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-5:  1.25rem;   /* 20px */
+  --space-6:  1.5rem;    /* 24px */
+  --space-7:  1.75rem;   /* 28px */
+  --space-8:  2rem;      /* 32px */
+
+  /* Component sizing */
+  --nav-width:      13rem;   /* sidebar — scales with root font size */
+  --header-height:  3.25rem;
+  --panel-max-w:    52.5rem; /* ~840px at 16px root */
+  --radius:         0.375rem;
+
+  /* Type scale */
+  --text-xs:   0.6875rem;  /* 11px */
+  --text-sm:   0.75rem;    /* 12px */
+  --text-base: 0.875rem;   /* 14px */
+  --text-md:   0.9375rem;  /* 15px — nav, labels */
+  --text-lg:   1.25rem;    /* 20px — panel heading */
+
+  /* Table scroll limits — viewport-relative so they grow on tall screens */
+  --ptable-max-h:   18vh;
+  --maptable-max-h: 14vh;
+  --log-max-h:      22vh;
+}
+
+/* --------------------------------------------------------------------------
+   Reset
+   -------------------------------------------------------------------------- */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+body {
+  font-family: var(--sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* --------------------------------------------------------------------------
+   Shell layout — CSS grid, collapses sidebar on narrow viewports
+   -------------------------------------------------------------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--nav-width) 1fr;
+  grid-template-rows: var(--header-height) 1fr;
+  min-height: 100vh;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+
+header {
+  grid-column: 1 / -1;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-6);
+  gap: var(--space-3);
+}
+
+.logo {
+  font-family: var(--mono);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.logo-sep  { color: var(--border2); margin: 0 0.25em; }
+
+.logo-sub  {
+  color: var(--text2);
+  font-size: var(--text-sm);
+}
+
+.header-spacer { flex: 1; }
+
+.run-badge {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  padding: 0.2em 0.7em;
+  border-radius: 99px;
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1px solid #4a3205;
+  display: none;
+}
+.run-badge.live  { background: var(--red-dim);   color: var(--red);   border-color: #6b2020; }
+.run-badge.show  { display: inline-block; }
+
+/* --------------------------------------------------------------------------
+   Sidebar nav
+   -------------------------------------------------------------------------- */
+
+nav {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: var(--space-5) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.nav-label {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5em var(--space-4);
+  cursor: pointer;
+  color: var(--text2);
+  font-size: var(--text-md);
+  border-left: 2px solid transparent;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+.nav-item:hover          { background: var(--bg3); color: var(--text); }
+.nav-item.active         { background: var(--bg3); color: var(--text); border-left-color: var(--accent); }
+.nav-item .sn            { font-family: var(--mono); font-size: var(--text-xs); color: var(--text3); min-width: 1.125rem; }
+.nav-item.active .sn     { color: var(--accent); }
+.nav-item .ck            { margin-left: auto; font-size: var(--text-xs); color: var(--green); opacity: 0; transition: opacity 0.15s; }
+.nav-item.done .ck       { opacity: 1; }
+
+/* --------------------------------------------------------------------------
+   Main content area
+   -------------------------------------------------------------------------- */
+
+main {
+  padding: var(--space-7) var(--space-8);
+  overflow-y: auto;
+}
+
+.panel          { display: none; max-width: var(--panel-max-w); }
+.panel.active   { display: block; }
+
+.ptitle {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-1);
+}
+
+.phead {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--space-5);
+  line-height: 1.3;
+}
+
+/* --------------------------------------------------------------------------
+   Cards
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.125em var(--space-5);
+  margin-bottom: 0.75rem;
+}
+
+/* Card with no internal padding — content handles its own spacing */
+.flush-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ctitle {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.75em;
+  padding-bottom: 0.625em;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ctitle inside a card-header-row doesn't need bottom margin/border */
+.ctitle.flush  { margin: 0; border: none; padding: 0; }
+
+/* Reusable card header — title on left, controls on right */
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75em;
+}
+
+/* Section header inside a flush-card */
+.card-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75em var(--space-4);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* --------------------------------------------------------------------------
+   Form elements
+   -------------------------------------------------------------------------- */
+
+.frow {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.frow.c2 { grid-template-columns: 1fr 1fr; }
+.frow.c3 { grid-template-columns: 2fr 1fr 1fr; }
+
+label {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text2);
+  display: block;
+  margin-bottom: 0.3em;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--text-base);
+  padding: 0.5em 0.625em;
+  outline: none;
+  transition: border-color 0.12s;
+}
+input:focus, select:focus { border-color: var(--accent); }
+select option             { background: var(--bg2); }
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375em;
+  padding: 0.5em 1em;
+  border-radius: var(--radius);
+  font-size: var(--text-base);
+  font-family: var(--mono);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.btn:hover                       { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+.btn:disabled                    { opacity: 0.4; cursor: not-allowed; }
+.btn.sm                          { padding: 0.3em 0.625em; font-size: var(--text-sm); }
+.btn.primary                     { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.btn.primary:hover:not(:disabled){ background: var(--accent); color: #000; }
+.btn.success                     { background: var(--green-dim); color: var(--green); border-color: var(--green); }
+.btn.danger                      { background: var(--red-dim);   color: var(--red);   border-color: var(--red); }
+
+/* Button row — flex bar at the bottom of a panel */
+.brow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-4);
+}
+.brow .sp, .sp { flex: 1; }
+
+/* Run controls bar inside the run card */
+.run-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------------------
+   Utility: inline flex row
+   -------------------------------------------------------------------------- */
+
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+/* --------------------------------------------------------------------------
+   Connection status badge
+   -------------------------------------------------------------------------- */
+
+.cs {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  padding: 0.3em 0.625em;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  display: none;
+}
+.cs.ok   { color: var(--green); border-color: var(--green); background: var(--green-dim); display: inline-block; }
+.cs.err  { color: var(--red);   border-color: var(--red);   background: var(--red-dim);   display: inline-block; }
+.cs.pend { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); display: inline-block; }
+
+/* --------------------------------------------------------------------------
+   Table selector (Step 2)
+   -------------------------------------------------------------------------- */
+
+.domain-group  { margin-bottom: var(--space-4); }
+
+.dlabel {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.4em;
+}
+
+.tgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.375rem;
+}
+
+.tcard {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625em;
+  padding: 0.625em 0.75em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--bg3);
+  transition: border-color 0.12s, background 0.12s;
+}
+.tcard:hover              { border-color: var(--border2); }
+.tcard.sel                { border-color: var(--accent); background: var(--accent-dim); }
+.tcard input[type=checkbox] { margin-top: 0.15em; flex-shrink: 0; accent-color: var(--accent); }
+
+.tname {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+.tdesc {
+  font-size: 0.6875rem;
+  color: var(--text2);
+  margin-top: 0.15em;
+}
+
+/* --------------------------------------------------------------------------
+   Conflict options (Step 3)
+   -------------------------------------------------------------------------- */
+
+.copt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75em;
+  padding: 0.75em 0.875em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-bottom: 0.5em;
+  background: var(--bg3);
+  transition: border-color 0.12s, background 0.12s;
+}
+.copt:hover           { border-color: var(--border2); }
+.copt.sel             { border-color: var(--accent); background: var(--accent-dim); }
+.copt input           { margin-top: 0.2em; flex-shrink: 0; accent-color: var(--accent); }
+.ctit  { font-family: var(--mono); font-size: var(--text-base); font-weight: 500; color: var(--text); }
+.cdesc { font-size: var(--text-sm); color: var(--text2); margin-top: 0.2em; }
+
+/* --------------------------------------------------------------------------
+   Toggle switch
+   -------------------------------------------------------------------------- */
+
+.toggle-wrap { display: flex; align-items: center; gap: 0.625rem; }
+
+.toggle {
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+.toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+.tslider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tslider::after {
+  content: '';
+  position: absolute;
+  width: 0.875rem;
+  height: 0.875rem;
+  left: 0.1875rem;
+  top: 0.1875rem;
+  background: var(--text2);
+  border-radius: 50%;
+  transition: transform 0.15s, background 0.15s;
+}
+.toggle input:checked + .tslider              { background: var(--accent-dim); border: 1px solid var(--accent); }
+.toggle input:checked + .tslider::after       { transform: translateX(1rem); background: var(--accent); }
+
+.tlabel { font-size: var(--text-base); color: var(--text2); cursor: pointer; user-select: none; }
+
+/* --------------------------------------------------------------------------
+   Stat / summary cards
+   -------------------------------------------------------------------------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+}
+
+.scard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75em 0.875em;
+}
+.scard .sl {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.3em;
+}
+.scard .sv {
+  font-family: var(--mono);
+  font-size: clamp(1.1rem, 2.5vw, 1.375rem);
+  font-weight: 500;
+  color: var(--text);
+}
+.scard .sv.green { color: var(--green); }
+.scard .sv.amber { color: var(--amber); }
+
+/* --------------------------------------------------------------------------
+   Per-table scan results
+   -------------------------------------------------------------------------- */
+
+.table-results { /* no bottom margin — card handles it */ }
+
+.tresult {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+.tresult:last-child { border-bottom: none; }
+.tresult .tn    { color: var(--text); font-weight: 500; flex: 1; }
+.tresult .trows { color: var(--green); min-width: 5rem; text-align: right; }
+.tresult .tpats { color: var(--text2); min-width: 6.25rem; text-align: right; }
+.tresult .tskip { color: var(--text3); }
+
+/* --------------------------------------------------------------------------
+   Progress bar
+   -------------------------------------------------------------------------- */
+
+.pbar-wrap {
+  height: 0.1875rem;
+  background: var(--border);
+  border-radius: 99px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+.pbar {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.35s ease;
+  width: 0%;
+}
+.pbar.done { background: var(--green); }
+.pbar.err  { background: var(--red); }
+
+/* --------------------------------------------------------------------------
+   Patient table (scan results)
+   -------------------------------------------------------------------------- */
+
+.ptable-wrap {
+  max-height: var(--ptable-max-h);
+  overflow-y: auto;
+}
+
+table.ptable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+table.ptable th {
+  background: var(--bg3);
+  color: var(--text2);
+  font-weight: 500;
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+table.ptable td {
+  padding: 0.4375em 0.75em;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+table.ptable tr:last-child td { border-bottom: none; }
+
+.new-tag, .exist-tag {
+  font-size: var(--text-xs);
+  padding: 0.1em 0.45em;
+  border-radius: 99px;
+  margin-left: 0.375em;
+}
+.new-tag   { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.exist-tag { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+
+.align-right { text-align: right; }
+
+/* --------------------------------------------------------------------------
+   Run log
+   -------------------------------------------------------------------------- */
+
+.log-wrap {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.875em var(--space-4);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  line-height: 1.9;
+  max-height: var(--log-max-h);
+  overflow-y: auto;
+  margin-bottom: 0.75rem;
+}
+
+.ll  { display: flex; gap: 0.625rem; }
+.lts { color: var(--text3); font-size: var(--text-xs); flex-shrink: 0; }
+.lm  { color: var(--text2); }
+.lm.ok   { color: var(--green); }
+.lm.warn { color: var(--amber); }
+.lm.err  { color: var(--red); }
+
+/* --------------------------------------------------------------------------
+   Mode banner (dry-run / live)
+   -------------------------------------------------------------------------- */
+
+.mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625em 0.875em;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  margin-bottom: 0.875rem;
+  border: 1px solid var(--amber);
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+.mode-banner.live { border-color: var(--red); background: var(--red-dim); color: var(--red); }
+
+/* --------------------------------------------------------------------------
+   ID mapping table
+   -------------------------------------------------------------------------- */
+
+.maptable-wrap {
+  max-height: var(--maptable-max-h);
+  overflow-y: auto;
+}
+
+table.maptable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+table.maptable th {
+  background: var(--bg3);
+  color: var(--text2);
+  text-align: left;
+  padding: 0.4375em 0.75em;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+table.maptable td {
+  padding: 0.375em 0.75em;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+table.maptable tr:last-child td { border-bottom: none; }
+
+/* --------------------------------------------------------------------------
+   Scan status inline indicator
+   -------------------------------------------------------------------------- */
+
+.scan-status-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text2);
+}
+
+.dot-pulse {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse 1s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* --------------------------------------------------------------------------
+   Text helpers
+   -------------------------------------------------------------------------- */
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--text2);
+}
+.hint.top-gap    { margin-top: 0.5rem; }
+.hint.bottom-gap { margin-bottom: 0.875rem; }
+
+.muted-label {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text3);
+}
+
+/* --------------------------------------------------------------------------
+   Utility: hidden
+   -------------------------------------------------------------------------- */
+
+.hidden { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   Scrollbar styling
+   -------------------------------------------------------------------------- */
+
+::-webkit-scrollbar         { width: 0.375rem; }
+::-webkit-scrollbar-track   { background: var(--bg); }
+::-webkit-scrollbar-thumb   { background: var(--border); border-radius: 0.1875rem; }
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* --------------------------------------------------------------------------
+   Responsive — collapse sidebar below ~600px
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 37.5rem) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--header-height) auto 1fr;
+  }
+
+  nav { display: none; }
+
+  main { padding: var(--space-4); }
+
+  .frow.c2,
+  .frow.c3 { grid-template-columns: 1fr; }
+
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+
+  .tgrid { grid-template-columns: 1fr; }
+}
