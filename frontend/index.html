@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMOP Appender</title>
+  <title>OMOP Utility Suite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
@@ -12,285 +12,310 @@
 <div class="shell">
 
   <header>
-    <span class="logo">OMOP<span class="logo-sep">/</span>Appender</span>
-    <span class="logo-sub">auto-diff patient appender · PostgreSQL</span>
+    <div class="header-left">
+      <button class="btn sm hidden" id="btn-menu" onclick="showMainMenu()">← Menu</button>
+      <span class="logo">OMOP<span class="logo-sep">/</span>Suite</span>
+    </div>
+    <span class="logo-sub" id="header-subtitle">Select a utility</span>
     <span class="header-spacer"></span>
-    <span class="run-badge" id="run-badge">dry-run</span>
+    <span class="run-badge hidden" id="run-badge">dry-run</span>
   </header>
 
-  <nav>
-    <div class="nav-label">Workflow</div>
-    <div class="nav-item active" data-s="0" onclick="goStep(0)"><span class="sn">01</span> Connections <span class="ck">✓</span></div>
-    <div class="nav-item"        data-s="1" onclick="goStep(1)"><span class="sn">02</span> Tables <span class="ck">✓</span></div>
-    <div class="nav-item"        data-s="2" onclick="goStep(2)"><span class="sn">03</span> Conflict rules <span class="ck">✓</span></div>
-    <div class="nav-item"        data-s="3" onclick="goStep(3)"><span class="sn">04</span> Scan &amp; preview <span class="ck">✓</span></div>
-    <div class="nav-item"        data-s="4" onclick="goStep(4)"><span class="sn">05</span> Run <span class="ck">✓</span></div>
-  </nav>
+  <div id="main-menu" class="view-panel active">
+    <div class="ptitle" style="margin-top: 2rem;">Welcome</div>
+    <div class="phead">Database Utility Suite</div>
+    <p class="hint bottom-gap">Select a module below to begin your database workflow.</p>
 
-  <main>
-
-    <!-- ===== Step 1: Connections ===== -->
-    <div class="panel active" id="p0">
-      <div class="ptitle">Step 01</div>
-      <div class="phead">Database connections</div>
-
-      <div class="card">
-        <div class="ctitle">Source database</div>
-        <div class="frow c3">
-          <div><label>Host</label><input type="text"   id="src-host"   value="localhost"></div>
-          <div><label>Port</label><input type="number" id="src-port"   value="5432"></div>
-          <div><label>Schema</label><input type="text" id="src-schema" value="cdm"></div>
-        </div>
-        <div class="frow c2">
-          <div><label>Database</label><input type="text" id="src-db"   placeholder="omop_source"></div>
-          <div><label>Username</label><input type="text" id="src-user" placeholder="postgres"></div>
-        </div>
-        <div class="frow">
-          <div><label>Password</label><input type="password" id="src-pass"></div>
-        </div>
-        <div class="inline-row">
-          <button class="btn sm" onclick="testConn('src')">Test connection</button>
-          <span class="cs" id="src-cs"></span>
-        </div>
+    <div class="utility-grid">
+      <div class="card utility-card" onclick="openTool('appender', 'auto-diff patient appender · PostgreSQL')">
+        <div class="utility-icon">⬡</div>
+        <div class="ctitle">OMOP Appender</div>
+        <div class="cdesc">Sync and deduplicate patient records and clinical events from a source to a target OMOP database.</div>
       </div>
 
-      <div class="card">
-        <div class="ctitle">Target database</div>
-        <div class="frow c3">
-          <div><label>Host</label><input type="text"   id="tgt-host"   value="localhost"></div>
-          <div><label>Port</label><input type="number" id="tgt-port"   value="5432"></div>
-          <div><label>Schema</label><input type="text" id="tgt-schema" value="cdm"></div>
-        </div>
-        <div class="frow c2">
-          <div><label>Database</label><input type="text" id="tgt-db"   placeholder="omop_target"></div>
-          <div><label>Username</label><input type="text" id="tgt-user" placeholder="postgres"></div>
-        </div>
-        <div class="frow">
-          <div><label>Password</label><input type="password" id="tgt-pass"></div>
-        </div>
-        <div class="inline-row">
-          <button class="btn sm" onclick="testConn('tgt')">Test connection</button>
-          <span class="cs" id="tgt-cs"></span>
-        </div>
+      <div class="card utility-card disabled">
+        <div class="utility-icon">▤</div>
+        <div class="ctitle">Vocabulary Updater</div>
+        <div class="cdesc">Coming soon. Automate the ingestion and mapping of new Athena vocabulary releases.</div>
       </div>
 
-      <div class="brow">
-        <span class="sp"></span>
-        <button class="btn primary" onclick="goStep(1)">Next → Tables</button>
+      <div class="card utility-card disabled">
+        <div class="utility-icon">◱</div>
+        <div class="ctitle">TBC</div>
+        <div class="cdesc">Coming soon.</div>
       </div>
     </div>
+  </div>
 
-    <!-- ===== Step 2: Tables ===== -->
-    <div class="panel" id="p1">
-      <div class="ptitle">Step 02</div>
-      <div class="phead">Table selection</div>
+  <div id="tool-appender" class="view-panel hidden">
+    <nav>
+      <div class="nav-label">Workflow</div>
+      <div class="nav-item active" data-s="0" onclick="goStep(0)"><span class="sn">01</span> Connections <span class="ck">✓</span></div>
+      <div class="nav-item"        data-s="1" onclick="goStep(1)"><span class="sn">02</span> Tables <span class="ck">✓</span></div>
+      <div class="nav-item"        data-s="2" onclick="goStep(2)"><span class="sn">03</span> Conflict rules <span class="ck">✓</span></div>
+      <div class="nav-item"        data-s="3" onclick="goStep(3)"><span class="sn">04</span> Scan &amp; preview <span class="ck">✓</span></div>
+      <div class="nav-item"        data-s="4" onclick="goStep(4)"><span class="sn">05</span> Run <span class="ck">✓</span></div>
+    </nav>
 
-      <div class="card">
-        <div class="card-header-row">
-          <div class="ctitle flush">Which tables to sync</div>
+    <main>
+      <div class="panel active" id="p0">
+        <div class="ptitle">Step 01</div>
+        <div class="phead">Database connections</div>
+
+        <div class="card">
+          <div class="ctitle">Source database</div>
+          <div class="frow c3">
+            <div><label>Host</label><input type="text"   id="src-host"   value="localhost"></div>
+            <div><label>Port</label><input type="number" id="src-port"   value="5432"></div>
+            <div><label>Schema</label><input type="text" id="src-schema" value="cdm"></div>
+          </div>
+          <div class="frow c2">
+            <div><label>Database</label><input type="text" id="src-db"   placeholder="omop_source"></div>
+            <div><label>Username</label><input type="text" id="src-user" placeholder="postgres"></div>
+          </div>
+          <div class="frow">
+            <div><label>Password</label><input type="password" id="src-pass"></div>
+          </div>
           <div class="inline-row">
-            <button class="btn sm" onclick="selAll(true)">All</button>
-            <button class="btn sm" onclick="selAll(false)">None</button>
+            <button class="btn sm" onclick="testConn('src')">Test connection</button>
+            <span class="cs" id="src-cs"></span>
           </div>
         </div>
-        <p class="hint">
-          The tool will scan both databases and import only rows that don't already exist in the
-          target, for every patient where new data is found.
-        </p>
-        <div id="table-sel"></div>
-      </div>
 
-      <div class="brow">
-        <button class="btn" onclick="goStep(0)">← Back</button>
-        <span class="sp"></span>
-        <button class="btn primary" onclick="goStep(2)">Next → Conflict rules</button>
-      </div>
-    </div>
-
-    <!-- ===== Step 3: Conflict rules ===== -->
-    <div class="panel" id="p2">
-      <div class="ptitle">Step 03</div>
-      <div class="phead">Conflict &amp; ID strategy</div>
-
-      <div class="card">
-        <div class="ctitle">Person record — if patient already exists in target</div>
-        <div class="copt sel" id="co-skip" onclick="selConflict('skip')">
-          <input type="radio" name="pc" value="skip" checked>
-          <div>
-            <div class="ctit">Skip (keep existing)</div>
-            <div class="cdesc">Preserve the target person record as-is. Only import new clinical events for that patient.</div>
+        <div class="card">
+          <div class="ctitle">Target database</div>
+          <div class="frow c3">
+            <div><label>Host</label><input type="text"   id="tgt-host"   value="localhost"></div>
+            <div><label>Port</label><input type="number" id="tgt-port"   value="5432"></div>
+            <div><label>Schema</label><input type="text" id="tgt-schema" value="cdm"></div>
+          </div>
+          <div class="frow c2">
+            <div><label>Database</label><input type="text" id="tgt-db"   placeholder="omop_target"></div>
+            <div><label>Username</label><input type="text" id="tgt-user" placeholder="postgres"></div>
+          </div>
+          <div class="frow">
+            <div><label>Password</label><input type="password" id="tgt-pass"></div>
+          </div>
+          <div class="inline-row">
+            <button class="btn sm" onclick="testConn('tgt')">Test connection</button>
+            <span class="cs" id="tgt-cs"></span>
           </div>
         </div>
-        <div class="copt" id="co-upsert" onclick="selConflict('upsert')">
-          <input type="radio" name="pc" value="upsert">
-          <div>
-            <div class="ctit">Upsert (update demographics)</div>
-            <div class="cdesc">Overwrite gender, race, year_of_birth etc. with source values where they differ.</div>
+
+        <div class="brow">
+          <span class="sp"></span>
+          <button class="btn primary" onclick="goStep(1)">Next → Tables</button>
+        </div>
+      </div>
+
+      <div class="panel" id="p1">
+        <div class="ptitle">Step 02</div>
+        <div class="phead">Table selection</div>
+
+        <div class="card">
+          <div class="card-header-row">
+            <div class="ctitle flush">Which tables to sync</div>
+            <div class="inline-row">
+              <button class="btn sm" onclick="selAll(true)">All</button>
+              <button class="btn sm" onclick="selAll(false)">None</button>
+            </div>
+          </div>
+          <p class="hint">
+            The tool will scan both databases and import only rows that don't already exist in the
+            target, for every patient where new data is found.
+          </p>
+          <div id="table-sel"></div>
+        </div>
+
+        <div class="brow">
+          <button class="btn" onclick="goStep(0)">← Back</button>
+          <span class="sp"></span>
+          <button class="btn primary" onclick="goStep(2)">Next → Conflict rules</button>
+        </div>
+      </div>
+
+      <div class="panel" id="p2">
+        <div class="ptitle">Step 03</div>
+        <div class="phead">Conflict &amp; ID strategy</div>
+
+        <div class="card">
+          <div class="ctitle">Person record — if patient already exists in target</div>
+          <div class="copt sel" id="co-skip" onclick="selConflict('skip')">
+            <input type="radio" name="pc" value="skip" checked>
+            <div>
+              <div class="ctit">Skip (keep existing)</div>
+              <div class="cdesc">Preserve the target person record as-is. Only import new clinical events for that patient.</div>
+            </div>
+          </div>
+          <div class="copt" id="co-upsert" onclick="selConflict('upsert')">
+            <input type="radio" name="pc" value="upsert">
+            <div>
+              <div class="ctit">Upsert (update demographics)</div>
+              <div class="cdesc">Overwrite gender, race, year_of_birth etc. with source values where they differ.</div>
+            </div>
+          </div>
+          <div class="copt" id="co-abort" onclick="selConflict('abort')">
+            <input type="radio" name="pc" value="abort">
+            <div>
+              <div class="ctit">Abort on conflict</div>
+              <div class="cdesc">Halt the entire import if any existing patient is encountered. For strictly audited pipelines.</div>
+            </div>
           </div>
         </div>
-        <div class="copt" id="co-abort" onclick="selConflict('abort')">
-          <input type="radio" name="pc" value="abort">
-          <div>
-            <div class="ctit">Abort on conflict</div>
-            <div class="cdesc">Halt the entire import if any existing patient is encountered. For strictly audited pipelines.</div>
-          </div>
-        </div>
-      </div>
 
-      <div class="card">
-        <div class="ctitle">Clinical event deduplication</div>
-        <div class="toggle-wrap">
-          <label class="toggle">
-            <input type="checkbox" id="dedup-tog" checked>
-            <span class="tslider"></span>
-          </label>
-          <span class="tlabel" onclick="document.getElementById('dedup-tog').click()">
-            Skip rows already present in target
-          </span>
-        </div>
-        <p class="hint top-gap">Dedup key per table: person_id + event concept_id + event start date.</p>
-      </div>
-
-      <div class="card">
-        <div class="ctitle">Primary key remapping</div>
-        <div class="frow">
-          <div>
-            <label>Strategy</label>
-            <select id="id-strat" onchange="toggleOffsetRow(this.value)">
-              <option value="auto">Auto-assign — next available ID in target (safest)</option>
-              <option value="preserve">Preserve source IDs — only if namespaces don't overlap</option>
-              <option value="offset">Apply fixed offset to source IDs</option>
-            </select>
-          </div>
-        </div>
-        <div class="frow hidden" id="off-row">
-          <div><label>Offset value</label><input type="number" id="id-off" value="1000000"></div>
-        </div>
-        <p class="hint">A source→target ID mapping CSV is exported after every run.</p>
-      </div>
-
-      <div class="brow">
-        <button class="btn" onclick="goStep(1)">← Back</button>
-        <span class="sp"></span>
-        <button class="btn primary" onclick="goStep(3)">Next → Scan &amp; preview</button>
-      </div>
-    </div>
-
-    <!-- ===== Step 4: Scan & Preview ===== -->
-    <div class="panel" id="p3">
-      <div class="ptitle">Step 04</div>
-      <div class="phead">Scan &amp; preview</div>
-
-      <div class="card">
-        <p class="hint bottom-gap">
-          The scan compares both databases across your selected tables and identifies every patient
-          with new rows to import — without writing anything. Run this before each merge to
-          preview exactly what will change.
-        </p>
-        <div class="inline-row">
-          <button class="btn primary" id="btn-scan" onclick="startScan()">▶ Run scan</button>
-          <span id="scan-inline" class="scan-status-inline hidden">
-            <span class="dot-pulse"></span> Scanning…
-          </span>
-        </div>
-      </div>
-
-      <div id="scan-results" class="hidden">
-        <div class="stat-grid">
-          <div class="scard"><div class="sl">Source patients</div><div class="sv"      id="sc-total">—</div></div>
-          <div class="scard"><div class="sl">With new data</div> <div class="sv green" id="sc-affected">—</div></div>
-          <div class="scard"><div class="sl">New rows total</div><div class="sv green" id="sc-rows">—</div></div>
-          <div class="scard"><div class="sl">New patients</div>  <div class="sv amber" id="sc-newpats">—</div></div>
-        </div>
-
-        <div class="card flush-card">
-          <div class="card-section-header">
-            <span>Per-table results</span>
-          </div>
-          <div id="table-results" class="table-results"></div>
-        </div>
-
-        <div class="card flush-card">
-          <div class="card-section-header">
-            <span>Patients with new data</span>
-            <span class="muted-label" id="pat-count-label"></span>
-          </div>
-          <div class="ptable-wrap">
-            <table class="ptable">
-              <thead>
-                <tr>
-                  <th>Source ID</th>
-                  <th>Source value</th>
-                  <th>Status</th>
-                  <th class="align-right">New rows</th>
-                </tr>
-              </thead>
-              <tbody id="pat-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="brow">
-        <button class="btn" onclick="goStep(2)">← Back</button>
-        <span class="sp"></span>
-        <button class="btn primary" id="btn-to-run" onclick="goStep(4)" disabled>Proceed to run →</button>
-      </div>
-    </div>
-
-    <!-- ===== Step 5: Run ===== -->
-    <div class="panel" id="p4">
-      <div class="ptitle">Step 05</div>
-      <div class="phead">Execute merge</div>
-
-      <div class="mode-banner" id="mode-banner">⬡ Dry-run — no data will be written to the target</div>
-
-      <div class="stat-grid">
-        <div class="scard"><div class="sl">Affected patients</div><div class="sv"       id="r-pats">—</div></div>
-        <div class="scard"><div class="sl">Tables</div>           <div class="sv"       id="r-tables">—</div></div>
-        <div class="scard"><div class="sl">Rows to insert</div>   <div class="sv green" id="r-rows">—</div></div>
-        <div class="scard"><div class="sl">Person conflicts</div> <div class="sv amber" id="r-conf">—</div></div>
-      </div>
-
-      <div class="pbar-wrap"><div class="pbar" id="rpbar"></div></div>
-
-      <div class="log-wrap" id="run-log">
-        <div class="ll"><span class="lm">Ready — configure options below and press Run.</span></div>
-      </div>
-
-      <div class="card">
-        <div class="run-controls">
+        <div class="card">
+          <div class="ctitle">Clinical event deduplication</div>
           <div class="toggle-wrap">
             <label class="toggle">
-              <input type="checkbox" id="dry-tog" checked onchange="updateMode()">
+              <input type="checkbox" id="dedup-tog" checked>
               <span class="tslider"></span>
             </label>
-            <span class="tlabel" onclick="document.getElementById('dry-tog').click()">Dry run (no writes)</span>
+            <span class="tlabel" onclick="document.getElementById('dedup-tog').click()">
+              Skip rows already present in target
+            </span>
           </div>
+          <p class="hint top-gap">Dedup key per table: person_id + event concept_id + event start date.</p>
+        </div>
+
+        <div class="card">
+          <div class="ctitle">Primary key remapping</div>
+          <div class="frow">
+            <div>
+              <label>Strategy</label>
+              <select id="id-strat" onchange="toggleOffsetRow(this.value)">
+                <option value="auto">Auto-assign — next available ID in target (safest)</option>
+                <option value="preserve">Preserve source IDs — only if namespaces don't overlap</option>
+                <option value="offset">Apply fixed offset to source IDs</option>
+              </select>
+            </div>
+          </div>
+          <div class="frow hidden" id="off-row">
+            <div><label>Offset value</label><input type="number" id="id-off" value="1000000"></div>
+          </div>
+          <p class="hint">A source→target ID mapping CSV is exported after every run.</p>
+        </div>
+
+        <div class="brow">
+          <button class="btn" onclick="goStep(1)">← Back</button>
           <span class="sp"></span>
-          <button class="btn"          id="btn-run"    onclick="startRun()">▶ Run</button>
-          <button class="btn success hidden" id="btn-export" onclick="exportMap()">↓ Export ID mapping</button>
+          <button class="btn primary" onclick="goStep(3)">Next → Scan &amp; preview</button>
         </div>
       </div>
 
-      <div id="map-section" class="hidden">
-        <div class="card flush-card">
-          <div class="card-section-header">ID mapping log</div>
-          <div class="maptable-wrap">
-            <table class="maptable">
-              <thead><tr><th>Table</th><th>Source ID</th><th>Target ID</th></tr></thead>
-              <tbody id="map-tbody"></tbody>
-            </table>
+      <div class="panel" id="p3">
+        <div class="ptitle">Step 04</div>
+        <div class="phead">Scan &amp; preview</div>
+
+        <div class="card">
+          <p class="hint bottom-gap">
+            The scan compares both databases across your selected tables and identifies every patient
+            with new rows to import — without writing anything. Run this before each merge to
+            preview exactly what will change.
+          </p>
+          <div class="inline-row">
+            <button class="btn primary" id="btn-scan" onclick="startScan()">▶ Run scan</button>
+            <span id="scan-inline" class="scan-status-inline hidden">
+              <span class="dot-pulse"></span> Scanning…
+            </span>
           </div>
         </div>
+
+        <div id="scan-results" class="hidden">
+          <div class="stat-grid">
+            <div class="scard"><div class="sl">Source patients</div><div class="sv"      id="sc-total">—</div></div>
+            <div class="scard"><div class="sl">With new data</div> <div class="sv green" id="sc-affected">—</div></div>
+            <div class="scard"><div class="sl">New rows total</div><div class="sv green" id="sc-rows">—</div></div>
+            <div class="scard"><div class="sl">New patients</div>  <div class="sv amber" id="sc-newpats">—</div></div>
+          </div>
+
+          <div class="card flush-card">
+            <div class="card-section-header">
+              <span>Per-table results</span>
+            </div>
+            <div id="table-results" class="table-results"></div>
+          </div>
+
+          <div class="card flush-card">
+            <div class="card-section-header">
+              <span>Patients with new data</span>
+              <span class="muted-label" id="pat-count-label"></span>
+            </div>
+            <div class="ptable-wrap">
+              <table class="ptable">
+                <thead>
+                  <tr>
+                    <th>Source ID</th>
+                    <th>Source value</th>
+                    <th>Status</th>
+                    <th class="align-right">New rows</th>
+                  </tr>
+                </thead>
+                <tbody id="pat-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="brow">
+          <button class="btn" onclick="goStep(2)">← Back</button>
+          <span class="sp"></span>
+          <button class="btn primary" id="btn-to-run" onclick="goStep(4)" disabled>Proceed to run →</button>
+        </div>
       </div>
 
-      <div class="brow">
-        <button class="btn" onclick="goStep(3)">← Back</button>
-      </div>
-    </div>
+      <div class="panel" id="p4">
+        <div class="ptitle">Step 05</div>
+        <div class="phead">Execute merge</div>
 
-  </main>
+        <div class="mode-banner" id="mode-banner">⬡ Dry-run — no data will be written to the target</div>
+
+        <div class="stat-grid">
+          <div class="scard"><div class="sl">Affected patients</div><div class="sv"       id="r-pats">—</div></div>
+          <div class="scard"><div class="sl">Tables</div>           <div class="sv"       id="r-tables">—</div></div>
+          <div class="scard"><div class="sl">Rows to insert</div>   <div class="sv green" id="r-rows">—</div></div>
+          <div class="scard"><div class="sl">Person conflicts</div> <div class="sv amber" id="r-conf">—</div></div>
+        </div>
+
+        <div class="pbar-wrap"><div class="pbar" id="rpbar"></div></div>
+
+        <div class="log-wrap" id="run-log">
+          <div class="ll"><span class="lm">Ready — configure options below and press Run.</span></div>
+        </div>
+
+        <div class="card">
+          <div class="run-controls">
+            <div class="toggle-wrap">
+              <label class="toggle">
+                <input type="checkbox" id="dry-tog" checked onchange="updateMode()">
+                <span class="tslider"></span>
+              </label>
+              <span class="tlabel" onclick="document.getElementById('dry-tog').click()">Dry run (no writes)</span>
+            </div>
+            <span class="sp"></span>
+            <button class="btn"          id="btn-run"    onclick="startRun()">▶ Run</button>
+            <button class="btn success hidden" id="btn-export" onclick="exportMap()">↓ Export ID mapping</button>
+          </div>
+        </div>
+
+        <div id="map-section" class="hidden">
+          <div class="card flush-card">
+            <div class="card-section-header">ID mapping log</div>
+            <div class="maptable-wrap">
+              <table class="maptable">
+                <thead><tr><th>Table</th><th>Source ID</th><th>Target ID</th></tr></thead>
+                <tbody id="map-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="brow">
+          <button class="btn" onclick="goStep(3)">← Back</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
 </div>
 
 <script src="js/app.js"></script>

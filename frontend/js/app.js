@@ -437,6 +437,80 @@ async function readNDJSON(response, onEvent) {
   }
 }
 
+/**
+ * Opens a specific tool from the main menu and updates the header.
+ * @param {string} toolId - The ID suffix of the tool wrapper (e.g., 'appender')
+ * @param {string} subtitle - The text to display in the header
+ */
+function openTool(toolId, subtitle, isPushState = true) {
+  // 1. Reset visibility
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    panel.classList.add('hidden');
+    panel.classList.remove('active');
+  });
+  
+  // 2. Show the tool
+  const targetTool = document.getElementById(`tool-${toolId}`);
+  if (targetTool) {
+    targetTool.classList.remove('hidden');
+    targetTool.classList.add('active');
+  }
+  
+  // 3. Update UI
+  document.getElementById('btn-menu').classList.remove('hidden');
+  document.getElementById('header-subtitle').innerText = subtitle;
+  
+  // 4. Wizard Init
+  if (toolId === 'appender') {
+    goStep(0); 
+    updateMode();
+  }
+
+  // 5. Update Browser History (only if this isn't triggered by a back button)
+  if (isPushState) {
+    history.pushState({ view: 'tool', toolId, subtitle }, "");
+  }
+}
+
+/**
+ * Returns to Main Menu and updates history if needed
+ */
+function showMainMenu(isPushState = true) {
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    panel.classList.add('hidden');
+    panel.classList.remove('active');
+  });
+  
+  const mainMenu = document.getElementById('main-menu');
+  if (mainMenu) {
+    mainMenu.classList.remove('hidden');
+    mainMenu.classList.add('active');
+  }
+  
+  document.getElementById('btn-menu').classList.add('hidden');
+  document.getElementById('header-subtitle').innerText = 'Select a utility';
+  document.getElementById('run-badge').classList.remove('show');
+
+  // Update Browser History
+  if (isPushState) {
+    history.pushState({ view: 'menu' }, "");
+  }
+}
+
+/* ==========================================================================
+   History Listener (Browser Back/Forward Buttons)
+   ========================================================================== */
+
+window.onpopstate = function(event) {
+  if (event.state && event.state.view === 'tool') {
+    // If the state says we were in a tool, open it without pushing a new state
+    openTool(event.state.toolId, event.state.subtitle, false);
+  } else {
+    // Otherwise, default back to the menu
+    showMainMenu(false);
+  }
+};
+
 /* ==========================================================================
    9. Init
    ========================================================================== */
@@ -444,4 +518,7 @@ async function readNDJSON(response, onEvent) {
 document.addEventListener('DOMContentLoaded', () => {
   initTables();
   updateMode();
+  
+  // Save the initial state as the "Menu" view
+  history.replaceState({ view: 'menu' }, "");
 });

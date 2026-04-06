@@ -90,7 +90,7 @@ body {
 
 .shell {
   display: grid;
-  grid-template-columns: var(--nav-width) 1fr;
+  grid-template-columns: 1fr;
   grid-template-rows: var(--header-height) 1fr;
   min-height: 100vh;
 }
@@ -150,6 +150,7 @@ nav {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
+  min-height: 100%; /* Ensure it spans the full height of the tool-appender */
 }
 
 .nav-label {
@@ -747,4 +748,86 @@ table.maptable tr:last-child td { border-bottom: none; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
 
   .tgrid { grid-template-columns: 1fr; }
+}
+
+/* --- View Management --- */
+.view-panel {
+  display: none;
+  width: 100%;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Main Menu: Centered column layout */
+#main-menu.active {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-7) var(--space-8);
+  max-width: var(--panel-max-w);
+  margin: 0 auto; /* Center the menu */
+}
+
+/* Tool Appender: RESTORES the Nav/Main side-by-side layout */
+#tool-appender.active {
+  display: grid;
+  grid-template-columns: var(--nav-width) 1fr; /* Restores sidebar width */
+  min-height: calc(100vh - var(--header-height));
+}
+
+/* Ensure the main area handles scrolling correctly */
+#tool-appender > main {
+  padding: var(--space-7) var(--space-8);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* ===== Header Updates ===== */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+header button.sm {
+  margin-right: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* --- Themed Main Menu Cards --- */
+.utility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.utility-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: var(--space-6);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.utility-card:hover:not(.disabled) {
+  border-color: var(--accent);
+  background: var(--bg3);
+  transform: translateY(-2px);
+}
+
+.utility-card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.utility-icon {
+  font-size: 2rem;
+  color: var(--accent);
+  margin-bottom: var(--space-3);
+  font-family: var(--mono);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
