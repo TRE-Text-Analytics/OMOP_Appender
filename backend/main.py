@@ -1009,5 +1009,5 @@ async def merge(cfg: MergeConfig):
 
 # Serve the frontend SPA
 # uncomment for dockerised version
-# app.mount("/", StaticFiles(directory="/app/frontend", html=True), name="frontend")
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/", StaticFiles(directory="/app/frontend", html=True), name="frontend")
+# app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
