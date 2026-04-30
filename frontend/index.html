@@ -139,6 +139,43 @@
         <div class="phead">Conflict &amp; ID strategy</div>
 
         <div class="card">
+          <div class="ctitle">Patient scope</div>
+          <div class="copt sel" id="ps-existing-and-new" onclick="selPatientScope('existing_and_new')">
+            <input type="radio" name="ps" value="existing_and_new" checked>
+            <div>
+              <div class="ctit">Existing + create new patients</div>
+              <div class="cdesc">Import clinical data for existing target patients and add brand-new person records for source-only patients. Default behaviour.</div>
+            </div>
+          </div>
+          <div class="copt" id="ps-existing-only" onclick="selPatientScope('existing_only')">
+            <input type="radio" name="ps" value="existing_only">
+            <div>
+              <div class="ctit">Existing patients only</div>
+              <div class="cdesc">Only import clinical rows for patients already in the target (matched by person_source_value). Source-only patients and the person table are skipped entirely.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ctitle">Sample mode</div>
+          <div class="toggle-wrap">
+            <label class="toggle">
+              <input type="checkbox" id="sample-tog" onchange="toggleSampleMode()">
+              <span class="tslider"></span>
+            </label>
+            <span class="tlabel" onclick="document.getElementById('sample-tog').click()">
+              Limit to first N patients (for fast iteration)
+            </span>
+          </div>
+          <div class="frow hidden top-gap" id="sample-row">
+            <div><label>Patient limit</label><input type="number" id="sample-limit" value="100" min="1" oninput="updateSampleBanner()"></div>
+          </div>
+          <p class="hint top-gap">
+            Deterministic by person_id ascending. Filter pushes into SQL so a 100-patient sample of a 169M-row clinical table only streams the matching rows.
+          </p>
+        </div>
+
+        <div class="card" id="card-person-conflict">
           <div class="ctitle">Person record — if patient already exists in target</div>
           <div class="copt sel" id="co-skip" onclick="selConflict('skip')">
             <input type="radio" name="pc" value="skip" checked>
@@ -174,7 +211,12 @@
               Skip rows already present in target
             </span>
           </div>
-          <p class="hint top-gap">Dedup key per table: person_id + event concept_id + event start date.</p>
+          <p class="hint top-gap">
+            Dedup key per table: person_id + event concept_id + event start date.
+            Compares source rows against rows that existed in target before the
+            run; legitimate repeats within source (e.g. ICU vitals sampled
+            hourly) flow through as distinct rows.
+          </p>
         </div>
 
         <div class="card">
@@ -268,6 +310,9 @@
         <div class="phead">Execute merge</div>
 
         <div class="mode-banner" id="mode-banner">⬡ Dry-run — no data will be written to the target</div>
+        <div class="mode-banner sample hidden" id="sample-banner">◇ Sample mode — limited to first <span id="sample-banner-n">100</span> patients</div>
+
+        <div id="error-panel" class="hidden"></div>
 
         <div class="stat-grid">
           <div class="scard"><div class="sl">Affected patients</div><div class="sv"       id="r-pats">—</div></div>
@@ -293,7 +338,18 @@
             </div>
             <span class="sp"></span>
             <button class="btn"          id="btn-run"    onclick="startRun()">▶ Run</button>
+            <button class="btn success hidden" id="btn-export-audit" onclick="exportPersonAudit()">↓ Export person audit</button>
             <button class="btn success hidden" id="btn-export" onclick="exportMap()">↓ Export ID mapping</button>
+          </div>
+        </div>
+
+        <div id="audit-section" class="hidden">
+          <div class="card flush-card">
+            <div class="card-section-header">
+              <span>Person identity audit</span>
+              <span class="muted-label">how source patients matched to target</span>
+            </div>
+            <div id="audit-summary" class="audit-summary"></div>
           </div>
         </div>
 

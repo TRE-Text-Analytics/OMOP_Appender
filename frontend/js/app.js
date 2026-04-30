@@ -53,7 +53,10 @@ function goStep(n) {
     el.classList.toggle('active', i === n);
     if (i < n) el.classList.add('done');
   });
-  if (n === 4) updateRunSummary();
+  if (n === 4) {
+    updateRunSummary();
+    updateSampleBanner();
+  }
 }
 
 /* ==========================================================================
@@ -173,6 +176,59 @@ function toggleOffsetRow(strategy) {
   document.getElementById('off-row').classList.toggle('hidden', strategy !== 'offset');
 }
 
+/** Get the currently selected patient_scope value. */
+function getPatientScope() {
+  return document.querySelector('input[name="ps"]:checked')?.value ?? 'existing_and_new';
+}
+
+/**
+ * Toggle the patient_scope radio cards and dim the person-conflict card when
+ * existing-only mode is active (the conflict rules don't apply because the
+ * person table won't be touched).
+ */
+function selPatientScope(value) {
+  for (const v of ['existing_and_new', 'existing_only']) {
+    const el = document.getElementById(`ps-${v.replaceAll('_', '-')}`);
+    el.classList.toggle('sel', v === value);
+    el.querySelector('input').checked = v === value;
+  }
+  document.getElementById('card-person-conflict')
+    .classList.toggle('is-disabled', value === 'existing_only');
+}
+
+/**
+ * Show or hide the patient-limit number input based on the sample-mode
+ * toggle. Also updates the run-panel banner so the user is reminded
+ * that sampling is active when they reach the Run step.
+ */
+function toggleSampleMode() {
+  const on = document.getElementById('sample-tog').checked;
+  document.getElementById('sample-row').classList.toggle('hidden', !on);
+  updateSampleBanner();
+}
+
+/** Update the sample-mode banner shown above run stats in Step 04. */
+function updateSampleBanner() {
+  const limit  = getPatientLimit();
+  const banner = document.getElementById('sample-banner');
+  if (limit !== null) {
+    document.getElementById('sample-banner-n').textContent = limit.toLocaleString();
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+/**
+ * Returns the current patient_limit value (positive integer) or null when
+ * the sample-mode toggle is off. Backend treats null / 0 as "no limit".
+ */
+function getPatientLimit() {
+  if (!document.getElementById('sample-tog').checked) return null;
+  const n = parseInt(document.getElementById('sample-limit').value, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /* ==========================================================================
    6. Scan
    ========================================================================== */
@@ -191,6 +247,8 @@ async function startScan() {
       source: getDbConfig('src'),
       target: getDbConfig('tgt'),
       tables: [...S.selected],
+      patient_scope: getPatientScope(),
+      patient_limit: getPatientLimit(),
     });
 
     await readNDJSON(stream, ev => {
@@ -317,6 +375,8 @@ async function startRun() {
     id_strategy:      document.getElementById('id-strat').value,
     id_offset:        parseInt(document.getElementById('id-off').value, 10) || 0,
     dry_run:          dry,
+    patient_scope:    getPatientScope(),
+    patient_limit:    getPatientLimit(),
   };
 
   // Reset UI
@@ -326,6 +386,9 @@ async function startRun() {
   document.getElementById('btn-run').disabled = true;
   document.getElementById('map-section').classList.add('hidden');
   document.getElementById('btn-export').classList.add('hidden');
+  document.getElementById('audit-section').classList.add('hidden');
+  document.getElementById('btn-export-audit').classList.add('hidden');
+  hideErrorPanel();
 
   appendLogLine(`Starting ${dry ? 'dry run' : 'live merge'} across ${S.selected.size} tables…`);
 
@@ -360,12 +423,27 @@ function handleRunEvent(ev) {
         document.getElementById('map-section').classList.remove('hidden');
         document.getElementById('btn-export').classList.remove('hidden');
       }
+
+      // v1.5.3: person identity audit. Independent of the row-level
+      // mapping log — answers "did source patient X correctly link to
+      // target patient Y via person_source_value?".
+      S.personAudit       = ev.person_audit ?? [];
+      S.personAuditCounts = ev.person_audit_counts ?? {};
+      S.personAuditTotal  = ev.person_audit_total ?? S.personAudit.length;
+      S.personAuditTruncated = ev.person_audit_truncated ?? false;
+      if (S.personAudit.length > 0) {
+        renderPersonAuditSummary();
+        document.getElementById('btn-export-audit').classList.remove('hidden');
+      }
       break;
     }
 
     case 'error':
       appendLogLine(ev.msg, 'err');
       document.getElementById('rpbar').classList.add('err');
+      // v1.4: structured row-level errors carry table/sql/row context.
+      // Fall back to plain log-only display for older error events.
+      if (ev.error_kind === 'row_insert') renderRichError(ev);
       break;
   }
 }
@@ -398,6 +476,193 @@ function exportMap() {
   a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = `omop_merge_map_${date}.csv`;
   a.click();
+}
+
+/**
+ * Render counts-by-match-type so the user can spot-check person matching
+ * at a glance — without opening the CSV. Shown above the ID-mapping
+ * table in the run panel.
+ */
+function renderPersonAuditSummary() {
+  const c = S.personAuditCounts ?? {};
+  const labels = {
+    matched_existing:           'Matched existing',
+    inserted_new:               'Inserted new',
+    source_only_skipped:        'Source-only skipped',
+    unmatched_no_source_value:  'No source_value',
+    unmatched:                  'Unmatched',
+  };
+  const rows = Object.entries(labels)
+    .filter(([k]) => (c[k] ?? 0) > 0)
+    .map(([k, label]) =>
+      `<div class="audit-pill audit-${k.replaceAll('_', '-')}">
+         <span class="audit-label">${label}</span>
+         <span class="audit-count">${c[k].toLocaleString()}</span>
+       </div>`)
+    .join('');
+  const truncMsg = S.personAuditTruncated
+    ? `<div class="audit-trunc">
+         Audit export limited to ${S.personAudit.length.toLocaleString()}
+         of ${S.personAuditTotal.toLocaleString()} patients
+       </div>` : '';
+  document.getElementById('audit-summary').innerHTML = rows + truncMsg;
+  document.getElementById('audit-section').classList.remove('hidden');
+}
+
+/**
+ * Export the person identity audit as CSV. Columns:
+ *   source_person_id, target_person_id, person_source_value, match_type
+ * Use this CSV to verify that source patients linked to target patients
+ * with matching person_source_value, not by accident.
+ */
+function exportPersonAudit() {
+  const header = 'source_person_id,target_person_id,person_source_value,match_type';
+  // CSV-escape values: wrap in quotes and double any embedded quotes.
+  const esc = v => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  };
+  const lines = S.personAudit.map(r => [
+    esc(r.source_person_id),
+    esc(r.target_person_id),
+    esc(r.person_source_value),
+    esc(r.match_type),
+  ].join(','));
+  const csv  = [header, ...lines].join('\n');
+  const date = new Date().toISOString().slice(0, 10);
+
+  const a   = document.createElement('a');
+  a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `omop_person_audit_${date}.csv`;
+  a.click();
+}
+
+/**
+ * Render a structured backend error (MergeRowError) inline above the run
+ * stats: PG message, sqlstate, the SQL that failed, and the offending
+ * row's column→value mapping. Backward compatible — the run-log line is
+ * still emitted by the caller, this just adds detail.
+ */
+function renderRichError(ev) {
+  const panel = document.getElementById('error-panel');
+  const row   = ev.row ?? {};
+  const cols  = Object.keys(row);
+  // Backend (v1.5.2) sends likely_column when it can detect the offender
+  // from a varchar-length error. Fall back to pg_column then null.
+  const likely = ev.likely_column ?? ev.pg_column ?? null;
+  const oversize = ev.oversize_columns ?? [];
+  // Mark every detected oversize column for highlighting, plus the
+  // single likely_column when present.
+  const highlightSet = new Set(oversize.map(o => o.column));
+  if (likely) highlightSet.add(likely);
+
+  const formatVal = v => {
+    if (v === null || v === undefined) return '<span class="ep-null">NULL</span>';
+    return escapeHtml(String(v));
+  };
+
+  // Reorder columns so highlighted ones come first. This is the fix for
+  // the previous behaviour where 18-column INSERTs scrolled the actual
+  // offender out of view in the panel's max-height region.
+  const orderedCols = [
+    ...cols.filter(c => highlightSet.has(c)),
+    ...cols.filter(c => !highlightSet.has(c)),
+  ];
+
+  const rowRows = orderedCols.length === 0
+    ? `<tr><td colspan="2" class="ep-null">no row data</td></tr>`
+    : orderedCols.map(c => {
+        const isLikely = highlightSet.has(c);
+        return `<tr class="${isLikely ? 'ep-likely' : ''}">
+          <td class="ep-col-name">${escapeHtml(c)}</td>
+          <td>${formatVal(row[c])}</td>
+        </tr>`;
+      }).join('');
+
+  // Oversize summary block — pulled out of the row table so it's
+  // immediately visible without scrolling.
+  let oversizeHtml = '';
+  if (oversize.length > 0) {
+    const items = oversize.map(o => `
+      <div class="ep-oversize-row">
+        <div class="ep-oversize-col">${escapeHtml(o.column)}</div>
+        <div class="ep-oversize-len">
+          ${o.length} chars
+          <span class="ep-oversize-arrow">→</span>
+          target accepts ${o.max_length}
+        </div>
+        <div class="ep-oversize-preview">${escapeHtml(o.preview ?? '')}</div>
+      </div>`).join('');
+    oversizeHtml = `
+      <div>
+        <div class="ep-section-label">
+          Oversize value${oversize.length > 1 ? 's' : ''} detected
+        </div>
+        <div class="ep-oversize-list">${items}</div>
+      </div>`;
+  }
+
+  // Build the meta dl only with fields that are present.
+  const metaPairs = [
+    ['PG message',  ev.pg_message,    'ep-message'],
+    ['SQLSTATE',    ev.sqlstate,      ''],
+    ['Detail',      ev.pg_detail,     ''],
+    ['Column',      ev.pg_column ?? ev.likely_column, ''],
+    ['Constraint',  ev.pg_constraint, ''],
+  ].filter(([, v]) => v != null && v !== '');
+
+  const metaHtml = metaPairs.map(([k, v, cls]) =>
+    `<dt>${k}</dt><dd class="${cls}">${escapeHtml(String(v))}</dd>`
+  ).join('');
+
+  panel.innerHTML = `
+    <div class="error-panel">
+      <div class="error-panel-head">
+        <span class="ep-icon">⨯</span>
+        <span class="ep-title">Insert failed</span>
+        <span class="ep-table">${escapeHtml(ev.table ?? '?')}</span>
+        <button class="ep-dismiss" onclick="hideErrorPanel()">Dismiss</button>
+      </div>
+      <div class="error-panel-body">
+        <dl class="ep-meta">${metaHtml}</dl>
+
+        ${oversizeHtml}
+
+        <div>
+          <div class="ep-section-label">
+            Offending row${highlightSet.size ? ` — flagged column${highlightSet.size > 1 ? 's' : ''} pinned to top` : ''}
+          </div>
+          <table class="ep-row-table">
+            <thead><tr><th>Column</th><th>Value</th></tr></thead>
+            <tbody>${rowRows}</tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="ep-section-label">Statement</div>
+          <div class="ep-sql">${escapeHtml(ev.sql ?? '')}</div>
+        </div>
+      </div>
+    </div>`;
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideErrorPanel() {
+  const panel = document.getElementById('error-panel');
+  panel.classList.add('hidden');
+  panel.innerHTML = '';
+}
+
+/** Escape arbitrary text for safe injection into HTML. */
+function escapeHtml(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /* ==========================================================================
