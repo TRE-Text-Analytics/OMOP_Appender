@@ -1,5 +1,5 @@
 services:
-  omop-merge:
+  omop-appender:
     build: .
     ports:
       - "8000:8000"
