@@ -48,3 +48,6 @@ For a production-ready environment or quick testing, use Docker Compose:
 ```Bash
 docker-compose up -d
 ```
+
+## Duplicate Prevention
+Each OMOP CDM table has configured columns which are used by OMOP-Appender to detect duplicate rows before insertion. These columns are listed at the beginning of the backend Python file (main.py), such as the condition_occurrence table which uses the following columns for duplicate prevention: **person_id**, **condition_concept_id** and **condition_start_date**. Meaning a person cannot have the same **condition_concept_id** on the same **condition_start_date** twice. 
