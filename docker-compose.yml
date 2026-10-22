@@ -3,6 +3,9 @@ services:
     build: .
     ports:
       - "8000:8000"
+    # This is for Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Optional: set defaults via env vars (can still be overridden in the UI)
       - PYTHONUNBUFFERED=1

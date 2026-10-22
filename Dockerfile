@@ -4,6 +4,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
 
+RUN apt-get install -y nodejs npm
+
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 
@@ -18,5 +20,8 @@ COPY . .
 
 EXPOSE 8000
 
-# Use 'uv run' to ensure the virtualenv is used
-CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+WORKDIR /app/frontend
+RUN npm install 
+RUN npm run build
+WORKDIR /app/backend
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,552 @@
+# =============================================================================
+# OMOP Appender — table configuration (THE source of truth)
+# =============================================================================
+# The OMOP Appender copies patient data from one OMOP CDM database (the SOURCE)
+# into another (the TARGET), matching patients across the two by
+# person_source_value and re-pointing surrogate ids so foreign keys stay valid.
+# This file tells it which CDM tables to handle, in what order, and — the part
+# you will most likely want to tune — how it decides whether a source row is
+# already present in the target so it is NOT appended twice.
+#
+# You do NOT need to edit code to configure the Appender: everything that
+# governs the merge lives in this file. It is loaded and validated at startup;
+# if it is missing or malformed the app refuses to start (by design — these
+# definitions are not optional defaults, they ARE the behaviour).
+#
+# QUICK START for tuning:
+#   - Each table below has a `dedup_cols` list — the columns that together
+#     define "the same record". Read the trade-off note further down, then
+#     adjust the lists to match how YOUR source data is populated.
+#   - To experiment without touching this file, copy it and point the
+#     OMOP_APPENDER_CONFIG environment variable at your copy.
+#   - After editing, restart the app; the startup log prints how many table
+#     definitions loaded, and any mistake (bad YAML, missing field, empty
+#     dedup_cols) is reported with the offending table named.
+#
+# IMPORTANT: this config controls deduplication only. It does not transform,
+# re-map vocabularies, or validate your data against the CDM — run the standard
+# OHDSI tooling (see "Further reading" at the end) for that.
+#
+# -----------------------------------------------------------------------------
+# What each field on a table means
+# -----------------------------------------------------------------------------
+#   label         Display name shown in the UI (usually the table name).
+#   domain        Grouping for the UI: admin | core | visit | clinical | derived.
+#   description   One-line human description shown in the UI.
+#
+#   person_fk     The column that holds the patient id, or null for admin /
+#                 reference tables that are not per-patient (care_site, provider).
+#                 On merge this column is rewritten from the source patient id to
+#                 the matched/created TARGET patient id.
+#
+#   self_pk       The table's own surrogate primary key, or null if it has none
+#                 (death). Under the default "auto" id strategy the Appender
+#                 allocates fresh target values for this column and records the
+#                 source->target mapping so child tables can be re-pointed.
+#
+#   visit_fk      The column linking to visit_occurrence, or null. Informational
+#                 for the UI; the actual remap is driven by fk_remaps below.
+#
+#   fk_remaps     Map of { column_name: id_map_name }. Before a row is inserted,
+#                 each listed column's SOURCE id is looked up in the named map
+#                 and replaced with the TARGET id. If the source id isn't found
+#                 the column is set to NULL (so a FK never points at a stale or
+#                 wrong target row). A column whose map name equals this table's
+#                 own name is SELF-REFERENCING (e.g. preceding_visit_occurrence_id)
+#                 and is resolved in a second pass after the table is inserted.
+#
+#   insert_order  Processing sequence. Lower runs first, so a referenced table is
+#                 populated before the tables that point at it:
+#                   1 care_site  2 provider  3 person  4 death
+#                   5 visit_occurrence  6 visit_detail
+#                   7 clinical tables   8 derived tables
+#                 Changing this can break referential integrity — only touch it
+#                 if you understand the FK graph above.
+#
+#   parent_fk     OPTIONAL. For a child table that has NO person_id and instead
+#                 hangs off another table (currently note_nlp -> note), the FK
+#                 column that links it to its parent. The column must also be in
+#                 fk_remaps. Such a table is scoped THROUGH its parent: a row is
+#                 kept only if this FK remaps to a parent row imported/matched
+#                 earlier in the run; otherwise the row is skipped (never
+#                 inserted with a dangling FK). Give the child a higher
+#                 insert_order than its parent so the parent runs first.
+#
+#   dedup_cols    THE natural key: the set of columns that together decide
+#                 whether a source row is "the same clinical fact" as one already
+#                 in the target. Before inserting, the Appender builds the set of
+#                 these keys already present in the target (for the patients in
+#                 scope) and SKIPS any source row whose key is already there.
+#                 See the dedup philosophy note below — this is the field you are
+#                 most likely to want to tune per dataset.
+#
+# -----------------------------------------------------------------------------
+# How to choose dedup_cols (the loose vs strict trade-off)
+# -----------------------------------------------------------------------------
+# * TOO LOOSE (too few columns): distinct clinical events collapse to one key,
+#   so genuine records already in the target cause real source rows to be
+#   dropped as "duplicates". E.g. keying measurement on (person, concept, DATE)
+#   drops a second, genuine same-day reading.
+# * TOO STRICT (too many / overly-specific columns): rows that are really the
+#   same fact fail to match, so duplicates survive.
+#
+# Rules of thumb used for the keys below:
+#   - Always include person_id (it is reliably remapped to the target patient).
+#   - Include the concept id and the FINEST available event time (date +
+#     datetime) — datetime separates repeated same-day events.
+#   - Include the payload that makes two events genuinely different: value_*,
+#     quantity, days_supply, modifier, status, etc.
+#   - Prefer *_source_value / *_source_concept_id as discriminators: they are
+#     ETL-stable and (unlike FK ids) never remapped.
+#   - *_type_concept_id (provenance: EHR vs claim vs registry) is a judgement
+#     call: INCLUDING it keeps same-fact-from-different-sources as distinct
+#     (looser, protects genuine records — the stance taken below); EXCLUDING it
+#     collapses them (stricter). Flip per your site's policy.
+#
+# CAVEATS baked into these choices:
+#   - FK columns in a key (e.g. care_site_id) are remapped to target space, so
+#     they compare correctly WITHIN one run. But on a RE-IMPORT, a parent row
+#     that was dedup-skipped is not recorded in the id remapper, so the child's
+#     FK resolves to NULL and the key can mismatch — reintroducing a duplicate.
+#     This is why FK ids are used sparingly here; source_value is preferred.
+#   - Never put large free text (note_text) in a key: the key tuples are held in
+#     an in-memory set sized to the target table and it would blow up memory.
+#   - A column listed here but absent from the TARGET table is silently ignored
+#     at merge time, which quietly weakens the key — confirm these names against
+#     your CDM DDL (field names below follow OMOP CDM v5.4).
+#
+# NOTE on within-run duplicates: dedup compares source rows against what is
+# ALREADY in the target, not against each other within one source extract. Two
+# identical rows in the same source both insert unless the target has a UNIQUE
+# constraint on the key. Deduplicate within the source in your ETL if needed.
+#
+# -----------------------------------------------------------------------------
+# Where these column choices come from (and why there's no "official" answer)
+# -----------------------------------------------------------------------------
+# OMOP/OHDSI does NOT define a natural key for the clinical tables. The only
+# uniqueness the standard enforces is the surrogate primary key (the *_id
+# column), which the Data Quality Dashboard's `isPrimaryKey` check verifies.
+# The CDM conventions explicitly say duplicates are valid and that deduplication
+# is "up to the ETL" — e.g. for condition_occurrence — and that a person may
+# legitimately have several identical-looking measurements in one visit.
+#
+# So the dedup_cols here are a pragmatic ETL policy, not a quoted standard:
+#   - clinical tables: person + standard concept + finest event date/datetime +
+#     the payload that makes two events genuinely different (value, status,
+#     modifier, ...) + the ETL-stable *_source_value as the strongest tie-break.
+#   - derived tables (the *_era / observation_period tables): these ARE built by
+#     a defined OHDSI algorithm, so they are unique by construction on
+#     (person, concept, era-start). Their keys are trimmed to that construction
+#     key; end dates, counts and gap_days are derived attributes, not needed to
+#     tell two eras apart.
+# Two columns were deliberately LEFT OUT of keys because the CDM conventions
+# make them unreliable: `quantity` in device_exposure/procedure_occurrence
+# (defaults to 1 when absent, so near-constant), and large free text (note_text).
+#
+# -----------------------------------------------------------------------------
+# Further reading (useful if you are new to appending OMOP data)
+# -----------------------------------------------------------------------------
+#   - OMOP CDM v5.4 table & field conventions:
+#       https://ohdsi.github.io/CommonDataModel/cdm54.html
+#   - Data Quality Dashboard — check definitions (what OHDSI actually enforces):
+#       https://ohdsi.github.io/DataQualityDashboard/articles/CheckTypeDescriptions.html
+#   - The Book of OHDSI — Ch. 15, Data Quality:
+#       https://ohdsi.github.io/TheBookOfOhdsi/DataQuality.html
+#   - OHDSI Forums (community Q&A on ETL / dedup decisions):
+#       https://forums.ohdsi.org/
+# =============================================================================
+
+tables:
+
+  # ======================= Reference / administrative =======================
+  # (no person_fk — these are not per-patient)
+
+  care_site:
+    label: care_site
+    domain: admin
+    description: Care sites / facilities
+    person_fk: null
+    self_pk: care_site_id
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 1
+    dedup_cols:
+      - care_site_source_value   # ETL-stable source id for the site; the natural key for an admin row (no person/date to lean on)
+
+  provider:
+    label: provider
+    domain: admin
+    description: Clinicians and providers
+    person_fk: null
+    self_pk: provider_id
+    visit_fk: null
+    fk_remaps:
+      care_site_id: care_site
+    insert_order: 2
+    dedup_cols:
+      - provider_source_value    # ETL-stable source id for the clinician; the natural key for an admin row
+
+  # ================================= Core ====================================
+
+  person:
+    label: person
+    domain: core
+    description: Demographics, DOB, gender, race
+    person_fk: person_id
+    self_pk: person_id
+    visit_fk: null
+    fk_remaps:
+      provider_id: provider
+      care_site_id: care_site
+    insert_order: 3
+    dedup_cols:
+      - person_source_value      # cross-DB patient identity; this is how patients are matched and deduped between source and target
+
+  death:
+    label: death
+    domain: core
+    description: Cause of death records
+    person_fk: person_id
+    self_pk: null
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 4
+    dedup_cols:
+      - person_id                # OMOP permits at most one death row per person, so the patient alone IS the natural key — more columns would only let a conflicting second death slip in
+
+  # ================================= Visit ===================================
+
+  visit_occurrence:
+    label: visit_occurrence
+    domain: visit
+    description: Inpatient / outpatient visits
+    person_fk: person_id
+    self_pk: visit_occurrence_id
+    visit_fk: null
+    fk_remaps:
+      provider_id: provider
+      care_site_id: care_site
+      preceding_visit_occurrence_id: visit_occurrence   # self-referencing — resolved in the second pass
+    insert_order: 5
+    dedup_cols:
+      - person_id              # the patient the visit belongs to
+      - visit_start_date       # day the visit began; the core event date
+      - visit_start_datetime   # finer start time; separates two same-day admissions
+      - visit_end_date         # visit end day; distinguishes visits that share a start date
+      - visit_end_datetime     # finer end time
+      - care_site_id           # facility; same-day visits at different sites are distinct. Remapped FK — see the re-import caveat in the header before relying on it
+      - visit_source_value     # ETL-stable source encounter id; a strong per-visit discriminator
+      - visit_concept_id       # visit type (IP / OP / ER); separates concurrent visits of different kinds
+
+  visit_detail:
+    label: visit_detail
+    domain: visit
+    description: Sub-visit encounter detail
+    person_fk: person_id
+    self_pk: visit_detail_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      parent_visit_detail_id: visit_detail      # self-referencing — resolved in the second pass
+      preceding_visit_detail_id: visit_detail   # self-referencing — resolved in the second pass
+      provider_id: provider
+      care_site_id: care_site
+    insert_order: 6
+    dedup_cols:
+      - person_id                     # the patient
+      - visit_detail_concept_id       # detail type (ward / ICU step); separates concurrent details
+      - visit_detail_start_date       # start day
+      - visit_detail_start_datetime   # finer start; separates same-day details
+      - visit_detail_end_date         # end day; distinguishes details sharing a start
+      - visit_detail_end_datetime     # finer end
+      - visit_detail_type_concept_id  # provenance; keeps records from different sources distinct
+      - visit_detail_source_value     # ETL-stable source id
+
+  # =============================== Clinical ==================================
+
+  condition_occurrence:
+    label: condition_occurrence
+    domain: clinical
+    description: Diagnoses and conditions
+    person_fk: person_id
+    self_pk: condition_occurrence_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    # The old 3-column key dropped a same-day diagnosis that recurred in a
+    # different role/source; type + status + source columns keep those distinct.
+    dedup_cols:
+      - person_id                     # the patient
+      - condition_concept_id          # the diagnosis itself
+      - condition_start_date          # onset day; the core event date
+      - condition_start_datetime      # finer onset; separates same-day diagnoses
+      - condition_type_concept_id     # primary vs secondary dx, EHR vs claim — a genuine second record, not a dup
+      - condition_status_concept_id   # admitting vs final etc.; a distinct clinical role
+      - condition_source_value        # ETL-stable source code / row id
+      - condition_source_concept_id   # source vocabulary concept; separates differently-coded diagnoses
+
+  drug_exposure:
+    label: drug_exposure
+    domain: clinical
+    description: Medications and prescriptions
+    person_fk: person_id
+    self_pk: drug_exposure_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    dedup_cols:
+      - person_id                      # the patient
+      - drug_concept_id                # the drug
+      - drug_exposure_start_date       # start day; the core event date
+      - drug_exposure_start_datetime   # finer start; separates same-day orders
+      - drug_exposure_end_date         # end; distinguishes courses that share a start
+      - drug_type_concept_id           # provenance (prescription vs dispense vs administration)
+      - quantity                       # dispensed amount; a different quantity is a different exposure
+      - days_supply                    # duration; separates otherwise-identical scripts
+      - route_concept_id               # administration route; a distinct route is a distinct exposure
+      - drug_source_value              # ETL-stable source order id
+
+  measurement:
+    label: measurement
+    domain: clinical
+    description: Labs, vitals, test results
+    person_fk: person_id
+    self_pk: measurement_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    dedup_cols:
+      - person_id               # the patient
+      - measurement_concept_id  # the test / measurement
+      - measurement_date        # measurement day
+      - measurement_datetime    # finer time; separates repeated same-day readings (daily vitals, ICU)
+      - value_as_number         # numeric result; a different value is a different reading
+      - value_as_concept_id     # categorical result; a different value is a different reading
+      - unit_concept_id         # unit; guards against collapsing readings recorded in different units
+
+  observation:
+    label: observation
+    domain: clinical
+    description: Clinical observations
+    person_fk: person_id
+    self_pk: observation_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    dedup_cols:
+      - person_id                 # the patient
+      - observation_concept_id    # the observation
+      - observation_date          # observation day
+      - observation_datetime      # finer time; separates same-day observations
+      - value_as_number           # numeric value
+      - value_as_string           # string value
+      - value_as_concept_id       # categorical value
+      - qualifier_concept_id      # qualifier; changes the meaning of the observation
+      - unit_concept_id           # unit
+      - observation_source_value  # ETL-stable source id
+
+  procedure_occurrence:
+    label: procedure_occurrence
+    domain: clinical
+    description: Surgeries and procedures
+    person_fk: person_id
+    self_pk: procedure_occurrence_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    dedup_cols:
+      - person_id               # the patient
+      - procedure_concept_id    # the procedure
+      - procedure_date          # procedure day
+      - procedure_datetime      # finer time; separates a procedure repeated the same day
+      - modifier_concept_id     # procedure modifier; a distinct modifier is a distinct record
+      # quantity is intentionally omitted from the key: the OMOP convention
+      # defaults it to 1 when absent, making it near-constant and a poor
+      # discriminator.
+      - procedure_source_value  # ETL-stable source id
+
+  device_exposure:
+    label: device_exposure
+    domain: clinical
+    description: Medical devices
+    person_fk: person_id
+    self_pk: device_exposure_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    dedup_cols:
+      - person_id                       # the patient
+      - device_concept_id               # the device
+      - device_exposure_start_date      # start day
+      - device_exposure_start_datetime  # finer start
+      - device_exposure_end_date        # end; distinguishes exposures sharing a start
+      - device_type_concept_id          # provenance
+      - unique_device_id                # UDI; OHDSI's device identifier when populated — strongest discriminator here
+      # quantity is intentionally omitted from the key: the OMOP convention
+      # defaults it to 1 when absent, making it near-constant and a poor
+      # discriminator.
+      - device_source_value             # ETL-stable source id
+
+  specimen:
+    label: specimen
+    domain: clinical
+    description: Biological specimens
+    person_fk: person_id
+    self_pk: specimen_id
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 7
+    dedup_cols:
+      - person_id                 # the patient
+      - specimen_concept_id       # specimen type
+      - specimen_date             # collection day
+      - specimen_datetime         # finer time; separates same-day specimens
+      - anatomic_site_concept_id  # body site; a different site is a different specimen
+      - quantity                  # amount collected
+      - specimen_source_value     # ETL-stable source id
+
+  note:
+    label: note
+    domain: clinical
+    description: Free-text clinical notes
+    person_fk: person_id
+    self_pk: note_id
+    visit_fk: visit_occurrence_id
+    fk_remaps:
+      visit_occurrence_id: visit_occurrence
+      visit_detail_id: visit_detail
+      provider_id: provider
+    insert_order: 7
+    # note_text is deliberately NOT a key column — it is a large free-text blob
+    # and would balloon the in-memory dedup set; source_value + datetime +
+    # class/title stand in as the discriminator instead.
+    dedup_cols:
+      - person_id              # the patient
+      - note_date              # note day
+      - note_datetime          # finer time; separates same-day notes
+      - note_type_concept_id   # provenance
+      - note_class_concept_id  # note class / document type; a distinct kind of document
+      - note_title             # document title; distinguishes same-class notes
+      - encoding_concept_id    # text encoding
+      - language_concept_id    # language
+      - note_source_value      # ETL-stable source note id
+
+  # note_nlp is a CHILD of note (OMOP CDM v5.4+): it has NO person_id and links
+  # to a note by note_id. It is therefore scoped THROUGH its parent note via
+  # parent_fk — a row is only appended if its note was imported/matched in this
+  # run, otherwise it is skipped (not inserted with a dangling note_id).
+  # insert_order 8 guarantees it runs AFTER note (7) regardless of the order the
+  # UI passes tables in.
+  note_nlp:
+    label: note_nlp
+    domain: clinical
+    description: NLP-derived annotations of notes (OMOP CDM v5.4+)
+    person_fk: null          # no person_id column — scoped through the parent note
+    self_pk: note_nlp_id
+    visit_fk: null
+    parent_fk: note_id       # the link to note; rows kept only when this remaps to an imported note
+    fk_remaps:
+      note_id: note          # remap the parent note id from source to target space
+    insert_order: 8
+    # snippet / note_text-style free text is deliberately NOT keyed (memory);
+    # offset + lexical_variant + concept pin a specific mention within a note.
+    dedup_cols:
+      - note_id              # the parent note (in target id space after remap)
+      - note_nlp_concept_id  # the concept the NLP extracted
+      - lexical_variant      # the exact text span matched; separates different mentions
+      - offset               # character offset in the note; separates repeated mentions of the same term
+      - nlp_date             # when the NLP was run
+      - nlp_system           # which NLP engine/version produced it (provenance)
+
+  # =============================== Derived ===================================
+  # Era/period tables are algorithm-derived, so a (person, concept, start)
+  # should already be unique by construction; the extra columns are insurance.
+  # If you can re-derive these on the target instead of appending them, that is
+  # usually cleaner than merging pre-computed eras from two CDMs.
+
+  observation_period:
+    label: observation_period
+    domain: derived
+    description: Observation period windows
+    person_fk: person_id
+    self_pk: observation_period_id
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 8
+    dedup_cols:
+      - person_id                      # the patient
+      - observation_period_start_date  # window start
+      - observation_period_end_date    # window end; distinguishes periods sharing a start
+      - period_type_concept_id         # provenance of the period
+
+  condition_era:
+    label: condition_era
+    domain: derived
+    description: Derived condition eras
+    person_fk: person_id
+    self_pk: condition_era_id
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 8
+    # Construction key: condition_era is derived (one era per person + condition
+    # over a contiguous window), so these three identify it. end_date and
+    # occurrence_count are derived attributes, not needed to tell eras apart.
+    dedup_cols:
+      - person_id                 # the patient
+      - condition_concept_id      # the condition
+      - condition_era_start_date  # era start — unique per person+condition by construction
+
+  drug_era:
+    label: drug_era
+    domain: derived
+    description: Derived drug eras
+    person_fk: person_id
+    self_pk: drug_era_id
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 8
+    # Construction key: drug_era is derived with a persistence window (classic
+    # 30-day gap), so one era per person+drug contiguous window. end_date,
+    # exposure_count and gap_days are derived attributes, not disambiguators.
+    dedup_cols:
+      - person_id            # the patient
+      - drug_concept_id      # the drug
+      - drug_era_start_date  # era start — unique per person+drug by construction
+
+  dose_era:
+    label: dose_era
+    domain: derived
+    description: Derived dose eras
+    person_fk: person_id
+    self_pk: dose_era_id
+    visit_fk: null
+    fk_remaps: {}
+    insert_order: 8
+    # Construction key: dose_era is derived per person + drug + dose level over a
+    # contiguous window, so these identify it; end_date is a derived attribute.
+    # unit_concept_id and dose_value are required in the key — without them the
+    # same drug recorded at two different doses would wrongly collapse into one.
+    dedup_cols:
+      - person_id            # the patient
+      - drug_concept_id      # the drug
+      - unit_concept_id      # dose unit (tied to the dose level)
+      - dose_value           # dose level — a different dose is a distinct era
+      - dose_era_start_date  # era start — unique per person+drug+dose by construction

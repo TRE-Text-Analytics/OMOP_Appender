@@ -8,5 +8,6 @@ dependencies = [
     "asyncpg==0.30.0",
     "fastapi==0.115.5",
     "pydantic==2.10.3",
+    "pyyaml>=6.0.3",
     "uvicorn==0.32.1",
 ]
