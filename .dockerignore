@@ -1,0 +1,10 @@
+# Keep local build artefacts out of the image so local builds match CI
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+backend/frontend/assets
+frontend/dist
+.env
+.DS_Store

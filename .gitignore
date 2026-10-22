@@ -8,18 +8,20 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-develop-eggs/
+# Anchored to backend/ so they can't match frontend source folders
+# (an unanchored "lib/" was hiding frontend/src/lib/)
+backend/build/
+backend/develop-eggs/
 dist/
-downloads/
-eggs/
+backend/downloads/
+backend/eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -138,9 +140,12 @@ celerybeat.pid
 .env
 .envrc
 .venv
-env/
-venv/
-ENV/
+/env/
+/venv/
+/ENV/
+backend/env/
+backend/venv/
+backend/ENV/
 env.bak/
 venv.bak/
 
@@ -208,6 +213,10 @@ __marimo__/
 
 # frontend
 frontend/node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
 
 # backend
 backend/frontend/assets
