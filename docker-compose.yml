@@ -1,6 +1,6 @@
 services:
   omop-appender:
-    build: .
+    image: ghcr.io/tre-text-analytics/omop_appender:latest
     ports:
       - "8000:8000"
     # This is for Linux

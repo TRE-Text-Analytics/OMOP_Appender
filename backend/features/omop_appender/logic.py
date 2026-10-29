@@ -13,6 +13,7 @@ Contains:
   - run_merge  (merge endpoint generator)
 """
 
+import heapq
 import json
 import re
 import sys
@@ -35,6 +36,7 @@ from .constants import (
     PATIENT_PAYLOAD_CAP,
     PERSON_AUDIT_CAP,
 )
+from .dedup_key import make_key
 from .models import DBConfig, MergeConfig, ScanRequest
 
 
@@ -484,10 +486,17 @@ class IDRemapper:
     # pointing at a stale / wrong record in the target.
     """
 
-    def __init__(self):
+    def __init__(self, needed: set[str] | None = None):
         self._maps: dict[str, dict[int, int]] = {}
+        # Names of maps that some fk_remaps entry reads. A map nobody reads
+        # (e.g. measurement, observation) is not stored: it could never
+        # affect a remap, but on a large merge it held one entry per inserted
+        # row for the whole run. None = keep everything.
+        self._needed = needed
 
     def record(self, map_name: str, src_id: int, tgt_id: int):
+        if self._needed is not None and map_name not in self._needed:
+            return
         self._maps.setdefault(map_name, {})[src_id] = tgt_id
 
     def remap(self, map_name: str, src_id) -> int | None:
@@ -636,7 +645,7 @@ async def get_tgt_dedup_keys(tgt, ts, table_name, pfk, dedup_cols, tgt_cols, tgt
         f'WHERE "{pfk}" = ANY($1::{cast})'
     )
     async for r in iter_rows(tgt, sql, id_params, batch_size=DEDUP_FETCH_BATCH):
-        keys.add(tuple([r[pfk]] + [r[c] for c in non_pk_dedup]))
+        keys.add(make_key([r[pfk]] + [r[c] for c in non_pk_dedup]))
     return keys, non_pk_dedup
 
 
@@ -655,7 +664,7 @@ async def get_admin_dedup_keys(tgt, ts, table_name, dedup_cols, tgt_cols):
     keys: set = set()
     sql = f'SELECT {col_list} FROM "{ts}"."{table_name}"'
     async for r in iter_rows(tgt, sql, batch_size=DEDUP_FETCH_BATCH):
-        keys.add(tuple(r[c] for c in non_pk_dedup))
+        keys.add(make_key(r[c] for c in non_pk_dedup))
     return keys, non_pk_dedup
 
 
@@ -853,6 +862,9 @@ async def diff_scan(req: ScanRequest) -> AsyncGenerator[str, None]:
         table_totals: dict[str, dict] = {}
 
         for table_name in tables_to_scan:
+            # Release the previous table's dedup set BEFORE building this
+            # table's, so two large sets are never held at the same time.
+            tgt_keys = None
             meta = OMOP_TABLES[table_name]
             pfk = meta["person_fk"]
             dedup_cols = meta["dedup_cols"]
@@ -886,7 +898,7 @@ async def diff_scan(req: ScanRequest) -> AsyncGenerator[str, None]:
                     if not non_pk_dedup:
                         new_rows_count += 1
                         continue
-                    key = tuple(row[c] for c in non_pk_dedup)
+                    key = make_key(row[c] for c in non_pk_dedup)
                     if key not in tgt_keys:
                         new_rows_count += 1
                 table_totals[table_name] = {
@@ -912,13 +924,13 @@ async def diff_scan(req: ScanRequest) -> AsyncGenerator[str, None]:
                         tgt, f'SELECT {col_list} FROM "{ts}"."{table_name}"',
                         batch_size=DEDUP_FETCH_BATCH,
                     ):
-                        tgt_keys.add(tuple(r[c] for c in scan_dedup))
+                        tgt_keys.add(make_key(r[c] for c in scan_dedup))
                 new_rows_count = 0
                 async for row in iter_rows(
                     src, f'SELECT * FROM "{ss}"."{table_name}"'
                 ):
                     if scan_dedup:
-                        key = tuple(row[c] for c in scan_dedup)
+                        key = make_key(row[c] for c in scan_dedup)
                         if key in tgt_keys:
                             continue
                     new_rows_count += 1
@@ -971,7 +983,7 @@ async def diff_scan(req: ScanRequest) -> AsyncGenerator[str, None]:
                     continue
 
                 if tgt_pid is not None and non_pk_dedup:
-                    key = tuple([tgt_pid] + [row[c] for c in non_pk_dedup])
+                    key = make_key([tgt_pid] + [row[c] for c in non_pk_dedup])
                     if key in tgt_keys:
                         continue
 
@@ -988,22 +1000,30 @@ async def diff_scan(req: ScanRequest) -> AsyncGenerator[str, None]:
                        new_rows=new_rows_count,
                        affected_patients=len(affected_patients))
 
-        patients_with_new_data = []
-        for src_pid, table_counts in patient_summary.items():
-            info = person_map[src_pid]
-            patients_with_new_data.append({
-                "source_person_id": src_pid,
-                "source_value":     info["source_value"],
-                "target_person_id": info["target_person_id"],
-                "is_new_patient":   not info["target_found"],
-                "new_rows_by_table": table_counts,
-                "total_new_rows":   sum(table_counts.values()),
-            })
-        patients_with_new_data.sort(key=lambda x: -x["total_new_rows"])
+        tgt_keys = None
 
-        total_patients = len(patients_with_new_data)
+        def patient_rows():
+            for src_pid, table_counts in patient_summary.items():
+                info = person_map[src_pid]
+                yield {
+                    "source_person_id": src_pid,
+                    "source_value":     info["source_value"],
+                    "target_person_id": info["target_person_id"],
+                    "is_new_patient":   not info["target_found"],
+                    "new_rows_by_table": table_counts,
+                    "total_new_rows":   sum(table_counts.values()),
+                }
+
+        # Only the top PATIENT_PAYLOAD_CAP patients are sent, so keep only
+        # those instead of building and sorting a row for every patient.
+        # heapq.nsmallest(n, it, key) is documented as equivalent to
+        # sorted(it, key=key)[:n] (stable), so the order is unchanged.
+        total_patients = len(patient_summary)
         truncated = total_patients > PATIENT_PAYLOAD_CAP
-        payload_patients = patients_with_new_data[:PATIENT_PAYLOAD_CAP]
+        payload_patients = heapq.nsmallest(
+            PATIENT_PAYLOAD_CAP, patient_rows(),
+            key=lambda x: -x["total_new_rows"],
+        )
 
         total_new_rows = sum(t["new_rows"] for t in table_totals.values())
         yield emit("scan_complete",
@@ -1081,11 +1101,18 @@ async def run_merge(cfg: MergeConfig) -> AsyncGenerator[str, None]:
     total_inserted = total_skipped = total_conflicts = 0
     mapping_log = CappedMappingLog()
     pk_counter = PKCounter()
-    remapper = IDRemapper()
+    remapper = IDRemapper(needed={
+        map_name
+        for m in OMOP_TABLES.values()
+        for map_name in m["fk_remaps"].values()
+    })
 
     try:
         async with tgt.transaction():
             for step_idx, table_name in enumerate(tables_to_run):
+                # Release the previous table's dedup set before building the
+                # next, so two large sets are never held at the same time.
+                tgt_admin_keys = tgt_keys = tgt_dedup_keys = None
                 meta       = OMOP_TABLES[table_name]
                 pfk        = meta["person_fk"]
                 self_pk    = meta["self_pk"]
@@ -1139,7 +1166,7 @@ async def run_merge(cfg: MergeConfig) -> AsyncGenerator[str, None]:
                         src, f'SELECT * FROM "{ss}"."{table_name}"'
                     ):
                         if non_pk_dedup:
-                            key = tuple(row[c] for c in non_pk_dedup)
+                            key = make_key(row[c] for c in non_pk_dedup)
                             if key in tgt_admin_keys:
                                 skipped += 1
                                 continue
@@ -1165,7 +1192,7 @@ async def run_merge(cfg: MergeConfig) -> AsyncGenerator[str, None]:
 
                         if non_pk_dedup:
                             tgt_admin_keys.add(
-                                tuple(row_data.get(c) for c in non_pk_dedup)
+                                make_key(row_data.get(c) for c in non_pk_dedup)
                             )
 
                         if cfg.dry_run:
@@ -1222,7 +1249,7 @@ async def run_merge(cfg: MergeConfig) -> AsyncGenerator[str, None]:
                             f'SELECT {col_list} FROM "{ts}"."{table_name}"',
                             batch_size=DEDUP_FETCH_BATCH,
                         ):
-                            tgt_keys.add(tuple(r[c] for c in non_pk_dedup))
+                            tgt_keys.add(make_key(r[c] for c in non_pk_dedup))
 
                     if self_pk and cfg.id_strategy == "auto":
                         await pk_counter.init_table(tgt, ts, table_name, self_pk)
@@ -1246,7 +1273,7 @@ async def run_merge(cfg: MergeConfig) -> AsyncGenerator[str, None]:
                             continue
 
                         if non_pk_dedup:
-                            key = tuple(row_data.get(c) for c in non_pk_dedup)
+                            key = make_key(row_data.get(c) for c in non_pk_dedup)
                             if key in tgt_keys:
                                 skipped += 1
                                 continue
@@ -1450,7 +1477,7 @@ async def run_merge(cfg: MergeConfig) -> AsyncGenerator[str, None]:
                                 self_src[col] = v
 
                     if cfg.dedup_enabled and non_pk_dedup:
-                        key = tuple(
+                        key = make_key(
                             [tgt_pid] + [row_data.get(c) for c in non_pk_dedup]
                         )
                         if key in tgt_dedup_keys:
