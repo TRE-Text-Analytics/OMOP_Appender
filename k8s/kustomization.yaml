@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: omop
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+
+# Override the image without editing deployment.yaml:
+#   kustomize edit set image ghcr.io/your-org/omop-appender=registry/omop-appender:1.0.0
+images:
+  - name: ghcr.io/your-org/omop-appender
+    newTag: latest

@@ -1,0 +1,12 @@
+omop-appender is deployed.
+
+{{- if .Values.ingress.enabled }}
+Open it at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+Reach it locally with:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "omop-appender.fullname" . }} 8000:{{ .Values.service.port }}
+then open http://localhost:8000
+{{- end }}

@@ -1,0 +1,21 @@
+# Optional: expose the app on a hostname through your ingress controller.
+# Remove this file from kustomization.yaml if you don't need it.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omop-appender
+  labels:
+    app.kubernetes.io/name: omop-appender
+spec:
+  ingressClassName: nginx                 # <-- match your cluster
+  rules:
+    - host: omop-appender.example.com     # <-- CHANGE ME
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: omop-appender
+                port:
+                  name: http

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: omop-appender
+  labels:
+    app.kubernetes.io/name: omop-appender
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: omop-appender
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

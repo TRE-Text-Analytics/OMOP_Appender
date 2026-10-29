@@ -1,0 +1,82 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/tre-text-analytics/omop_appender   # <-- CHANGE ME
+  tag: "latest"                                     # defaults to .Chart.AppVersion
+  pullPolicy: Always
+
+# e.g. [{ name: regcred }] for a private registry
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+containerPort: 8000
+
+# Plain environment variables (map of NAME: value)
+env:
+  PYTHONUNBUFFERED: "1"
+
+# Extra env entries in raw Kubernetes form, e.g. values from Secrets:
+#   - name: DB_PASSWORD
+#     valueFrom:
+#       secretKeyRef: { name: omop-db, key: password }
+extraEnv: []
+
+# Load every key of existing Secrets/ConfigMaps as env vars
+envFrom: []
+#  - secretRef:
+#      name: omop-appender-secrets
+
+# Replaces docker-compose's `extra_hosts: host.docker.internal:host-gateway`.
+# Set `ip` to the address of the machine running your database.
+hostAliases: 
+ - ip: "172.22.0.1" # <-- CHANGE ME. This is the gateway IP of the host machine on the Docker network. You can find it by running `ip addr show docker0` on Linux or `ipconfig` on Windows.
+   hostnames:
+     - host.docker.internal
+
+service:
+  type: ClusterIP        # NodePort / LoadBalancer to expose directly
+  port: 8000
+  nodePort: null         # only used when type is NodePort
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: omop-appender.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: omop-appender-tls
+  #    hosts:
+  #      - omop-appender.example.com
+
+# Probes default to a TCP check on the app port. Set httpGetPath (e.g. /docs)
+# to switch to HTTP checks.
+probes:
+  httpGetPath: ""
+  startup:
+    periodSeconds: 5
+    failureThreshold: 30
+  liveness:
+    periodSeconds: 20
+  readiness:
+    periodSeconds: 10
+
+resources:
+  requests:
+    cpu: 2
+    memory: 8Gi
+  limits:
+    memory: 10Gi # adjust as needed, e.g. for large OMOP datasets
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
