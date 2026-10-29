@@ -184,4 +184,4 @@ Issues and pull requests are welcome. For a bug, please include the CDM version,
 
 Released under the [GNU General Public License v3.0](LICENSE).
 
-OMOP and the OMOP Common Data Model are maintained by the [OHDSI](https://www.ohdsi.org/) community. This project is not affiliated with or endorsed by OHDSI.
+The OMOP Common Data Model are maintained by the [OHDSI](https://www.ohdsi.org/) community. This project is not affiliated with or endorsed by OHDSI.
