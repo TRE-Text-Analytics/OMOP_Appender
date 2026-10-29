@@ -50,7 +50,7 @@ docker run --rm -p 8000:8000 \
 
 Open **http://localhost:8000**. If your databases run on the same machine, enter `host.docker.internal` as the host instead of `localhost`.
 
-For Docker Compose, Kubernetes and Helm, see the **[deployment guide](DEPLOY.md)**.
+For Docker Compose, Kubernetes and Helm, see the **[deployment guide](Deploy.md)**.
 
 > [!WARNING]
 > The app has no login. Anyone who can reach it can connect it to any database it can reach. Run it on a private network and never expose it directly to the internet.
@@ -117,11 +117,11 @@ The app checks the file when it starts and refuses to start if it's invalid, nam
 - **Derived tables** (`observation_period` and the `*_era` tables) can be appended, but regenerating them on the target after a merge is usually cleaner.
 - **Matching depends on `person_source_value`.** Source patients without one can't be matched to existing target patients; they're treated as new patients (or skipped in existing-patients-only mode).
 - **Timestamp types must agree.** If a source column is `timestamp with time zone` and the matching target column is `timestamp`, the live merge for that table fails and the whole run is rolled back.
-- **Memory grows with the size of the target**, not with how much you append. See the [sizing guide](DEPLOY.md#sizing).
+- **Memory grows with the size of the target**, not with how much you append. See the [sizing guide](Deploy.md#sizing).
 
 ## Deployment
 
-The **[deployment guide](DEPLOY.md)** covers Docker Compose, Kubernetes with Helm, and plain Kubernetes files, along with database connectivity, sizing and troubleshooting.
+The **[deployment guide](Deploy.md)** covers Docker Compose, Kubernetes with Helm, and plain Kubernetes files, along with database connectivity, sizing and troubleshooting.
 
 Images are published to the GitHub Container Registry for `linux/amd64` and `linux/arm64` on every release:
 
